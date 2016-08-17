@@ -1,4 +1,4 @@
-Get-Netstat
+#Get-Netstat
 
 Netstat without WMI.
 
@@ -6,6 +6,8 @@ Associates process name and pid with socket.
 
 Code adapted from Pinvoke's netstat
 
-Usage
+#Usage
 
-. .\Get-Netstat Get-Netstat
+PS>. .\Get-Netstat 
+
+PS>Get-Netstat
