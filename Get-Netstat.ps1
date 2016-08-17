@@ -1,11 +1,10 @@
-  
-  $TypeDefinition=@"
+$TypeDefinition=@"
   using System;
   using System.Runtime.InteropServices;
   using System.Collections;
   using System.Collections.Generic;
   using System.Linq;
-
+  
   // https://msdn2.microsoft.com/en-us/library/aa366073.aspx
   namespace IPHelper {
 
@@ -157,34 +156,48 @@
   } // namespace
 "@
   Add-Type -TypeDefinition $TypeDefinition -PassThru | Out-Null
-
-  function NetStat {
-
-    $x=New-Object IPHelper.IPHelperWrapper
-    $y=$x.GetAllTCPv4Connections()
-    $services=Get-WmiObject -Namespace "root\cimv2" -Class "Win32_Service"
-    $StateList=@("UNKNOWN","CLOSED","LISTEN","SYN-SENT","SYN-RECEIVED","ESTABLISHED","FIN-WAIT-1","FIN-WAIT-2","CLOSE-WAIT","CLOSING","LAST-ACK","TIME-WAIT","DELETE-TCB")
-    $output=@()
-    for ($i=0; $i -lt $y.Count; $i++) {
+ function reverseIP([string]$arg1) { 
+    $arglist = $arg1.split('.') 
+	$arg1 = $null 
+	for($i = $arglist.Length - 1; $i -ge 0; $i--) { 
+	   $arg1+=$arglist[$i]
+	   $arg1+='.'
+	}
+	$arg1 = $arg1.TrimEnd('.')
+	return $arg1
+	
+	}
+	   
+ function Get-Netstat {  
+ $iphlp=New-Object IPHelper.IPHelperWrapper
+ $tcp_comms = $iphlp.GetAllTCPv4Connections() 
+ $StateList=@("UNKNOWN","CLOSED","LISTEN","SYN-SENT","SYN-RECEIVED","ESTABLISHED","FIN-WAIT-1","FIN-WAIT-2","CLOSE-WAIT","CLOSING","LAST-ACK","TIME-WAIT","DELETE-TCB")
+ $output=@()
+ for ($i=0; $i -lt $tcp_comms.Count; $i++) {
       $objOutput=New-Object -TypeName PSObject
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "LocalAddress" -Value ([System.Net.IPAddress]::new($y[$i].localAddr).IPAddressToString)
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "RemoteAddress" -Value ([System.Net.IPAddress]::new($y[$i].remoteAddr).IPAddressToString)
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "LocalPort" -Value ($y[$i].localPort[1]+($y[$i].localPort[0]*0x100)+($y[$i].localPort[3]*0x1000)+($y[$i].localPort[2]*0x10000))
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "RemotePort" -Value ($y[$i].remotePort[1]+($y[$i].remotePort[0]*0x100)+($y[$i].remotePort[3]*0x1000)+($y[$i].remotePort[2]*0x10000))
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "PID" -Value $y[$i].owningPid
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "ProcessName" -Value ((Get-Process -Id $y[$i].owningPid).ProcessName)
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "StateValue" -Value $y[$i].state
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "State" -Value $StateList[$y[$i].state]
-      $boolNoService=$true
-      for ($j=0; $j -lt $services.Count; $j++) {
-    if ($services[$j].ProcessId -eq $y[$i].owningPid) {
-      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "ServiceName" -Value $services[$j].Caption
-      $boolNoService=$false
-      break;
-    }
-      }
-      if ($boolNoService) { Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "ServiceName" -Value $null }
+      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "LocalAddress" -Value (reverseIp([System.Net.IPAddress]::parse($tcp_comms[$i].localAddr).IPAddressToString))
+      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "RemoteAddress" -Value (reverseIp([System.Net.IPAddress]::parse($tcp_comms[$i].remoteAddr).IPAddressToString))
+      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "LocalPort" -Value ($tcp_comms[$i].localPort[1]+($tcp_comms[$i].localPort[0]*0x100)+($tcp_comms[$i].localPort[3]*0x1000)+($tcp_comms[$i].localPort[2]*0x10000))
+      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "RemotePort" -Value ($tcp_comms[$i].remotePort[1]+($tcp_comms[$i].remotePort[0]*0x100)+($tcp_comms[$i].remotePort[3]*0x1000)+($tcp_comms[$i].remotePort[2]*0x10000))
+      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "PID" -Value $tcp_comms[$i].owningPid
+      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "ProcessName" -Value ((Get-Process -Id $tcp_comms[$i].owningPid).ProcessName)
+      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "StateValue" -Value $tcp_comms[$i].state
+      Add-Member -InputObject $objOutput -MemberType NoteProperty -Name "State" -Value $StateList[$tcp_comms[$i].state]
+	  
       $output+=$objOutput
-    }
-    $output[1].LocalPort
-  }
+}
+
+
+
+for ($i=0; $i -lt $output.Length; $i++) { 
+   if (($output[$i].State -ne "LISTEN")) {
+   Write-Host $output[$i].LocalAddress $output[$i].LocalPort $output[$i].RemoteAddress $output[$i].RemotePort $output[$i].PID $output[$i].ProcessName $output[$i].State | Format-Table
+}
+   else {
+   Write-Host  $output[$i].LocalAddress $output[$i].LocalPort $output[$i].PID $output[$i].ProcessName $output[$i].State | Format-Table
+}
+Write-Host " "
+}
+
+}
+
